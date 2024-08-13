@@ -15,10 +15,15 @@ import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.example.trackingtest.notification.NotificationsHelper
 import me.bvn13.sdk.android.gpx.GpxType
-import me.bvn13.sdk.android.gpx.GpxWriter
 import me.bvn13.sdk.android.gpx.MetadataType
 import me.bvn13.sdk.android.gpx.WptType
 import me.bvn13.sdk.android.gpx.toXmlString
+import java.io.BufferedWriter
+import java.io.File
+import java.io.FileWriter
+import java.nio.file.Files
+import java.time.Instant
+import kotlin.io.path.Path
 
 
 class LocationTrackingService() : Service() {
@@ -151,6 +156,19 @@ class LocationTrackingService() : Service() {
 
 
                     Log.d("GPX FILE HERE", "$gpxType")
+
+
+                    if(!File("${baseContext.filesDir.absolutePath}/saved_routes").exists()) {
+                        Files.createDirectory(Path("${baseContext.filesDir.absolutePath}/saved_routes"))
+                    }
+
+                    val file = File("${baseContext.filesDir.absolutePath}/saved_routes", "tracking_data_${Instant.now()}.gpx")
+                    val fw = FileWriter(file.absoluteFile)
+                    val bw = BufferedWriter(fw)
+                    bw.write(gpxType)
+                    bw.close()
+
+                    Log.d("HERE NEW FILE SAVED", "current file list:${File("${baseContext.filesDir.absolutePath}/saved_routes").listFiles()?.map { "\n" + it.name }}")
 
                     stopForegroundService()
                 }
