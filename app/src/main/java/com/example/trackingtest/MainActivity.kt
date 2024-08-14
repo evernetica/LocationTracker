@@ -103,6 +103,7 @@ import androidx.wear.compose.material.ExperimentalWearMaterialApi
 import androidx.wear.compose.material.SwipeToRevealCard
 import com.example.trackingtest.service.LocationTrackingService
 import com.example.trackingtest.ui.theme.TrackingTestTheme
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import java.io.File
@@ -236,18 +237,25 @@ fun SavedRoutesScreen(navController: NavController) {
 
                 Column {
                     fileList?.map { file ->
+
+                        val coroutineScope = rememberCoroutineScope()
+                        val swipeState = rememberRevealState(
+                            anchors = mapOf(
+                                RevealValue.Covered to 0F,
+                                RevealValue.Revealing to 0.4F,
+                            )
+                        )
+
                         SwipeToReveal(
-                            state = rememberRevealState(
-                                anchors = mapOf(
-                                    RevealValue.Covered to 0F,
-                                    RevealValue.Revealing to 0.4F,
-                                )
-                            ),
+                            state = swipeState,
                             primaryAction = {
                                 Row {
                                     Button(
                                         onClick = {
-                                            fileList = fileList?.minus(file)
+                                            coroutineScope.launch {
+                                                swipeState.snapTo(RevealValue.Covered)
+                                                fileList = fileList?.minus(file)
+                                            }
                                         },
                                         shape = RectangleShape,
                                         colors = ButtonDefaults.buttonColors(
