@@ -3,9 +3,13 @@
 package com.example.trackingtest
 
 import android.annotation.SuppressLint
+import android.content.ContentValues
 import android.content.Intent
 import android.os.Bundle
+import android.os.Environment
+import android.provider.MediaStore
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -42,7 +46,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -82,6 +85,7 @@ import java.io.File
 
 //TODO: ask for location permission (x2)
 //TODO: ask for foreground permission
+//TODO: ask for storage permission
 
 class LocationServiceUpdate(val newDistance: String?, val newTime: String?)
 
@@ -251,7 +255,9 @@ fun SavedRoutesScreen(navController: NavController) {
                     )
                 }
 
-                Column {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                ) {
                     fileList?.map { file ->
                         val coroutineScope = rememberCoroutineScope()
                         val swipeState = rememberRevealState(
@@ -270,6 +276,7 @@ fun SavedRoutesScreen(navController: NavController) {
                                             coroutineScope.launch {
                                                 swipeState.snapTo(RevealValue.Covered)
                                                 fileList = fileList?.minus(file)
+                                                file.delete()
                                             }
                                         },
                                         shape = RectangleShape,
@@ -287,7 +294,38 @@ fun SavedRoutesScreen(navController: NavController) {
                                     }
 
                                     Button(
-                                        onClick = {},
+                                        onClick = {
+                                            val resolver = context.contentResolver
+                                            val values = ContentValues()
+
+                                            values.put(
+                                                MediaStore.MediaColumns.DISPLAY_NAME,
+                                                file.name
+                                            )
+                                            values.put(
+                                                MediaStore.MediaColumns.MIME_TYPE,
+                                                "application/my-custom-type"
+                                            )
+                                            values.put(
+                                                MediaStore.MediaColumns.RELATIVE_PATH,
+                                                Environment.DIRECTORY_DOWNLOADS + "/" + "saved_routes"
+                                            )
+                                            val uri = resolver.insert(
+                                                MediaStore.Files.getContentUri("external"),
+                                                values
+                                            )
+
+                                            val outputStream = resolver.openOutputStream(uri!!)
+
+                                            outputStream?.write(file.readBytes())
+                                            outputStream?.close()
+
+                                            Toast.makeText(
+                                                context,
+                                                "File saved to \"Downloads/saved_routes/\"",
+                                                Toast.LENGTH_LONG,
+                                            ).show()
+                                        },
                                         shape = RectangleShape,
                                         modifier = Modifier
                                             .fillMaxSize()
