@@ -2,36 +2,25 @@
 
 package com.example.trackingtest
 
-import android.Manifest
 import android.annotation.SuppressLint
-import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.location.LocationManager
-import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.slideIn
 import androidx.compose.animation.slideOut
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
@@ -41,12 +30,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CenterAlignedTopAppBar
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -57,7 +42,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -65,59 +50,94 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.imageResource
-import androidx.compose.ui.res.vectorResource
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.app.ActivityCompat
-import androidx.core.app.ServiceCompat
-import androidx.core.content.ContextCompat
-import androidx.core.content.ContextCompat.getSystemService
 import androidx.core.content.ContextCompat.startForegroundService
-import androidx.core.widget.ContentLoadingProgressBar
+import androidx.lifecycle.MutableLiveData
 import androidx.navigation.NavController
-import androidx.navigation.NavOptions
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.wear.compose.foundation.ExperimentalWearFoundationApi
-import androidx.wear.compose.foundation.RevealState
 import androidx.wear.compose.foundation.RevealValue
 import androidx.wear.compose.foundation.SwipeToReveal
 import androidx.wear.compose.foundation.rememberRevealState
-import androidx.wear.compose.material.ExperimentalWearMaterialApi
-import androidx.wear.compose.material.SwipeToRevealCard
 import com.example.trackingtest.service.LocationTrackingService
 import com.example.trackingtest.ui.theme.TrackingTestTheme
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
-import kotlinx.serialization.Serializable
+import org.greenrobot.eventbus.EventBus
+import org.greenrobot.eventbus.Subscribe
+import org.greenrobot.eventbus.ThreadMode
 import java.io.File
-import java.util.stream.Stream
+
 
 //TODO: ask for location permission (x2)
 //TODO: ask for foreground permission
 
+//TODO: save state on screen change
+//TODO: select accuracy before foreground service starts
+
+class LocationServiceUpdate(val newDistance: String?, val newTime: String?)
+
+enum class DropdownValues {
+    Low,
+    Mid,
+    High;
+
+    fun getDisplayName(): String {
+        return when (this) {
+            Low -> "Low"
+            Mid -> "Medium"
+            High -> "High"
+        }
+    }
+
+    fun getAccuracyValue(): String {
+        return when (this) {
+            Low -> "low"
+            Mid -> "medium"
+            High -> "high"
+        }
+    }
+}
+
+
 class MainActivity : ComponentActivity() {
+
+    private val liveRouteData: MutableLiveData<LocationServiceUpdate> by lazy {
+        MutableLiveData<LocationServiceUpdate>()
+    }
+
+
+    @Subscribe(threadMode = ThreadMode.MAIN)
+    fun onMessageEvent(event: LocationServiceUpdate?) {
+        liveRouteData.value = event
+    }
+
+    override fun onStart() {
+        super.onStart()
+        EventBus.getDefault().register(this)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        EventBus.getDefault().unregister(this)
+    }
 
     abstract class Routes {
         companion object {
-            const val tracker = "tracker"
-            const val savedRoutes = "savedRoutes"
+            const val TRACKER = "tracker"
+            const val SAVED_ROUTES = "savedRoutes"
         }
     }
 
@@ -127,10 +147,10 @@ class MainActivity : ComponentActivity() {
         setContent {
             val navController = rememberNavController()
 
-            NavHost(navController = navController, startDestination = Routes.tracker) {
-                composable(route = Routes.tracker) { TrackerScreen(navController) }
+            NavHost(navController = navController, startDestination = Routes.TRACKER) {
+                composable(route = Routes.TRACKER) { TrackerScreen(navController, liveRouteData) }
                 composable(
-                    route = Routes.savedRoutes,
+                    route = Routes.SAVED_ROUTES,
                     enterTransition = {
                         slideIn(
                             initialOffset = { offset -> IntOffset(offset.width, 0) },
@@ -147,20 +167,24 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-//TODO: спросить за перекидывание navController
-
 @Composable
-fun TrackerScreen(navController: NavController) {
-    var text by remember { mutableStateOf("location here") }
+fun TrackerScreen(
+    navController: NavController,
+    liveRouteData: MutableLiveData<LocationServiceUpdate>
+) {
+    var serviceStarted by remember {
+        mutableStateOf(false)
+    }
 
     TrackingTestTheme {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
             topBar = {
                 TopAppBar(
-                    title = {},
+                    title = { Text("Location Tracking") },
                     actions = {
                         Button(
+                            enabled = !serviceStarted,
                             modifier = Modifier.size(48.dp),
                             shape = RoundedCornerShape(4.dp),
                             contentPadding = PaddingValues(8.dp),
@@ -169,7 +193,7 @@ fun TrackerScreen(navController: NavController) {
                                 contentColor = Color.Black,
                             ),
                             onClick = {
-                                navController.navigate(MainActivity.Routes.savedRoutes)
+                                navController.navigate(MainActivity.Routes.SAVED_ROUTES)
                             }) {
                             Icon(
                                 ImageBitmap.imageResource(id = R.drawable.history_edu_icon),
@@ -182,22 +206,18 @@ fun TrackerScreen(navController: NavController) {
             },
         ) { innerPadding ->
             LocationFragment(
-                text = text,
-                setText = { newValue ->
-                    text = newValue
-                },
                 modifier = Modifier.padding(innerPadding),
-                navController = navController
+                liveRouteData = liveRouteData,
+                serviceStartedSet = { newValue -> serviceStarted = newValue },
+                serviceStartedValue = serviceStarted,
             )
         }
     }
 }
 
-@OptIn(ExperimentalWearMaterialApi::class, ExperimentalWearFoundationApi::class)
+@OptIn(ExperimentalWearFoundationApi::class)
 @Composable
 fun SavedRoutesScreen(navController: NavController) {
-    data class TrackingRecord(val name: String)
-
     TrackingTestTheme {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
@@ -237,7 +257,6 @@ fun SavedRoutesScreen(navController: NavController) {
 
                 Column {
                     fileList?.map { file ->
-
                         val coroutineScope = rememberCoroutineScope()
                         val swipeState = rememberRevealState(
                             anchors = mapOf(
@@ -322,11 +341,24 @@ fun SavedRoutesScreen(navController: NavController) {
 @Composable
 fun LocationFragment(
     modifier: Modifier = Modifier,
-    text: String,
-    setText: (newValue: String) -> (Unit),
-    navController: NavController,
+    liveRouteData: MutableLiveData<LocationServiceUpdate>,
+    serviceStartedSet: (Boolean) -> Unit,
+    serviceStartedValue: Boolean,
 ) {
     val context = LocalContext.current
+
+    var travelDuration by remember {
+        mutableStateOf("-")
+    }
+
+    var travelDistance by remember {
+        mutableStateOf("-")
+    }
+
+    liveRouteData.observe(LocalLifecycleOwner.current) {
+        if (it.newTime != null) travelDuration = it.newTime
+        if (it.newDistance != null) travelDistance = it.newDistance
+    }
 
     Box {
         Column(
@@ -338,16 +370,17 @@ fun LocationFragment(
         ) {
             Column {
                 Text("Travel Duration:", style = MaterialTheme.typography.titleMedium)
-                Text("-")
+                Text(travelDuration)
                 Text("Travel Distance:", style = MaterialTheme.typography.titleMedium)
-                Text("-")
+                Text(travelDistance)
             }
 
-            var serviceStarted by remember {
-                mutableStateOf(false)
-            }
             var showDialog by remember {
                 mutableStateOf(false)
+            }
+
+            var dropdownValue by remember {
+                mutableStateOf(DropdownValues.Low)
             }
 
             Button(
@@ -357,19 +390,23 @@ fun LocationFragment(
                     .aspectRatio(1f),
                 shape = CircleShape,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (serviceStarted) Color.Red else Color.Green
+                    containerColor = if (serviceStartedValue) Color.Red else Color.Green
                 ),
                 border = BorderStroke(1.dp, Color.Gray),
                 onClick = {
-                    Log.d("CLICK HERE", "$serviceStarted")
-                    if (serviceStarted) {
+                    Log.d("CLICK HERE", "$serviceStartedValue")
+                    if (serviceStartedValue) {
                         showDialog = true
                     } else {
-                        serviceStarted = true
+                        val intent = Intent(context, LocationTrackingService::class.java)
+                        intent.setAction("start/${dropdownValue.getAccuracyValue()}")
+                        startForegroundService(context, intent)
+
+                        serviceStartedSet(true)
                     }
                 }
             ) {
-                Text(if (serviceStarted) "Stop" else "Start")
+                Text(if (serviceStartedValue) "Stop" else "Start")
             }
 
             if (showDialog) AlertDialog(
@@ -379,7 +416,7 @@ fun LocationFragment(
                     .padding(8.dp),
                 onDismissRequest = {
                     showDialog = false
-                    serviceStarted = false
+                    serviceStartedSet(false)
                 },
                 content = {
                     Column {
@@ -389,16 +426,27 @@ fun LocationFragment(
                         )
                         Row {
                             Button(onClick = {
+                                val intent = Intent(context, LocationTrackingService::class.java)
+                                intent.setAction("stop_and_save")
+                                startForegroundService(context, intent)
+
                                 showDialog = false
-                                serviceStarted = false
-                                //TODO: save
+                                serviceStartedSet(false)
+                                travelDuration = "-"
+                                travelDistance = "-"
                             }) {
                                 Text("Save")
                             }
                             Box(Modifier.width(8.dp))
                             Button(onClick = {
+                                val intent = Intent(context, LocationTrackingService::class.java)
+                                intent.setAction("stop")
+                                startForegroundService(context, intent)
+
                                 showDialog = false
-                                serviceStarted = false
+                                serviceStartedSet(false)
+                                travelDuration = "-"
+                                travelDistance = "-"
                             }) {
                                 Text("Just Stop")
                             }
@@ -417,16 +465,15 @@ fun LocationFragment(
                 var dropdownState by remember {
                     mutableStateOf(false)
                 }
-                var dropdownValue by remember {
-                    mutableStateOf("Low")
-                }
 
                 Button(
+                    enabled = !serviceStartedValue,
                     onClick = {
                         dropdownState = !dropdownState
                     },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color.LightGray,
+                        contentColor = Color.Black,
                     ),
                     shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
                     border = BorderStroke(1.dp, Color.Gray),
@@ -458,143 +505,35 @@ fun LocationFragment(
                             modifier = Modifier.padding(bottom = 8.dp)
                         )
 
-                        Text(dropdownValue)
+                        Text(dropdownValue.getDisplayName())
                     }
                 }
+
                 DropdownMenu(
                     expanded = dropdownState,
                     onDismissRequest = { dropdownState = !dropdownState }) {
-                    DropdownMenuItem(text = { Text("Low") }, onClick = {
-                        dropdownValue = "Low"
-                        dropdownState = false
-                    })
-                    DropdownMenuItem(text = { Text("High") }, onClick = {
-                        dropdownValue = "High"
-                        dropdownState = false
-                    })
+                    DropdownMenuItem(
+                        text = { Text(DropdownValues.Low.getDisplayName()) },
+                        onClick = {
+                            dropdownValue = DropdownValues.Low
+                            dropdownState = false
+                        })
+                    DropdownMenuItem(
+                        text = { Text(DropdownValues.Mid.getDisplayName()) },
+                        onClick = {
+                            dropdownValue = DropdownValues.Mid
+                            dropdownState = false
+                        })
+                    DropdownMenuItem(
+                        text = { Text(DropdownValues.High.getDisplayName()) },
+                        onClick = {
+                            dropdownValue = DropdownValues.High
+                            dropdownState = false
+                        })
                 }
             }
 
-            Box {}
-
-//            Text(text = text)
-//            Row {
-//
-//
-//                Button(
-//                    colors = ButtonDefaults.buttonColors(
-//                        containerColor = Color.Green,
-//                    ),
-//                    onClick = {
-//                        Log.d("CLICK HERE", "")
-//
-//                        val intent = Intent(context, LocationTrackingService::class.java)
-//                        intent.setAction("start")
-//                        startForegroundService(context, intent)
-//                    }) {
-//                    Text("start service")
-//                }
-//            }
-//
-//            Row {
-//                Button(
-//                    colors = ButtonDefaults.buttonColors(
-//                        containerColor = Color.Red,
-//                    ),
-//                    onClick = {
-//                        Log.d("CLICK HERE 2", "")
-//
-//                        val intent = Intent(context, LocationTrackingService::class.java)
-//                        intent.setAction("stop")
-//                        startForegroundService(context, intent)
-//                    }) {
-//                    Text("stop service")
-//                }
-//
-//                Button(
-//                    colors = ButtonDefaults.buttonColors(
-//                        containerColor = Color.Yellow,
-//                    ),
-//                    onClick = {
-//                        Log.d("CLICK HERE 3", "")
-//
-//                        val intent = Intent(context, LocationTrackingService::class.java)
-//                        intent.setAction("stop_and_save")
-//                        startForegroundService(context, intent)
-//                    }) {
-//                    Text("stop and save")
-//                }
-//            }
-//
-//            Button(
-//                onClick = {
-//                    val intent = Intent(context, LocationTrackingService::class.java)
-//                    intent.setAction("accuracy/passive")
-//                    startForegroundService(context, intent)
-//                }) {
-//                Text("accuracy/passive")
-//            }
-//            Button(
-//                onClick = {
-//                    val intent = Intent(context, LocationTrackingService::class.java)
-//                    intent.setAction("accuracy/network")
-//                    startForegroundService(context, intent)
-//                }) {
-//                Text("accuracy/network")
-//            }
-//            Button(
-//                onClick = {
-//                    val intent = Intent(context, LocationTrackingService::class.java)
-//                    intent.setAction("accuracy/fused")
-//                    startForegroundService(context, intent)
-//                }) {
-//                Text("accuracy/fused")
-//            }
-//            Button(
-//                onClick = {
-//                    val intent = Intent(context, LocationTrackingService::class.java)
-//                    intent.setAction("accuracy/gps")
-//                    startForegroundService(context, intent)
-//                }) {
-//                Text("accuracy/gps")
-//            }
-//
-//            Button(
-//                modifier = Modifier.padding(top = 32.dp),
-//                onClick = {
-//                    val intent = Intent(context, LocationTrackingService::class.java)
-//                    intent.setAction("interval/1000")
-//                    startForegroundService(context, intent)
-//                }) {
-//                Text("interval/1000")
-//            }
-//            Button(
-//                onClick = {
-//                    val intent = Intent(context, LocationTrackingService::class.java)
-//                    intent.setAction("interval/3000")
-//                    startForegroundService(context, intent)
-//                }) {
-//                Text("interval/3000")
-//            }
-//            Button(
-//                onClick = {
-//                    val intent = Intent(context, LocationTrackingService::class.java)
-//                    intent.setAction("interval/5000")
-//                    startForegroundService(context, intent)
-//                }) {
-//                Text("interval/5000")
-//            }
-//            Button(
-//                onClick = {
-//                    val intent = Intent(context, LocationTrackingService::class.java)
-//                    intent.setAction("interval/10000")
-//                    startForegroundService(context, intent)
-//                }) {
-//                Text("interval/10000")
-//            }
+            Box {} // bottom "padding"
         }
     }
 }
-
-// TYPE : location
-

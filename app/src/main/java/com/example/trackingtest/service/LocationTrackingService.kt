@@ -11,23 +11,44 @@ import android.os.Binder
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
+import androidx.compose.foundation.pager.PagerSnapDistance
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.MutableFloatState
+import androidx.compose.runtime.MutableIntState
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.text.toLowerCase
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
+import com.example.trackingtest.LocationServiceUpdate
 import com.example.trackingtest.notification.NotificationsHelper
 import me.bvn13.sdk.android.gpx.GpxType
 import me.bvn13.sdk.android.gpx.MetadataType
 import me.bvn13.sdk.android.gpx.WptType
 import me.bvn13.sdk.android.gpx.toXmlString
+import org.greenrobot.eventbus.EventBus
 import java.io.BufferedWriter
 import java.io.File
 import java.io.FileWriter
 import java.nio.file.Files
 import java.time.Instant
+import java.util.Locale
+import java.util.Timer
+import kotlin.concurrent.timer
 import kotlin.io.path.Path
+import kotlin.time.DurationUnit
+import kotlin.time.toDuration
 
+
+// EventBus.getDefault().post(LocationServiceUpdate(null, null))
 
 class LocationTrackingService() : Service() {
     private val binder = LocalBinder()
+
+    private var durationTimer: Timer? = null
+
 
     private val locationManager by lazy {
         ContextCompat.getSystemService(
@@ -35,12 +56,20 @@ class LocationTrackingService() : Service() {
             LocationManager::class.java
         ) as LocationManager
     }
-    private var listener = MyLocationListener(mutableListOf(), "", 0)
+    private var listener = MyLocationListener(
+        mutableListOf(),
+        "",
+        0,
+        mutableFloatStateOf(0F),
+        mutableStateOf(null),
+    )
 
     private var selectedAccuracy = "default"
     private var interval = 1000
 
     private val locationHistory = mutableListOf<Location>()
+    private var totalDistance = mutableFloatStateOf(0F)
+    private var lastLocation = mutableStateOf<Location?>(null)
 
     inner class LocalBinder : Binder() {
         fun getService(): LocationTrackingService = this@LocationTrackingService
@@ -54,6 +83,8 @@ class LocationTrackingService() : Service() {
         private val locationHistory: MutableList<Location>,
         private val selectedAccuracy: String,
         private val interval: Int,
+        private var mutableDistance: MutableFloatState,
+        private var mutableLastLocation: MutableState<Location?>,
     ) : LocationListener {
         override fun onLocationChanged(location: Location) {
             Log.d(
@@ -61,13 +92,30 @@ class LocationTrackingService() : Service() {
                 "accuracy: $selectedAccuracy, interval: $interval\nlocation: ${location.latitude} / ${location.longitude}"
             )
 
+            if (mutableLastLocation.value != null) {
+                mutableDistance.floatValue += location.distanceTo(mutableLastLocation.value!!)
+                EventBus.getDefault().post(
+                    LocationServiceUpdate(
+                        newDistance = "${"%.2f".format(mutableDistance.floatValue / 1000)} km",
+                        newTime = null,
+                    )
+                )
+            }
+            mutableLastLocation.value = location
+
             locationHistory.add(location)
         }
     }
 
     @SuppressLint("MissingPermission") // TODO: fix
     private fun startTracking() {
-        listener = MyLocationListener(locationHistory, selectedAccuracy, interval)
+        listener = MyLocationListener(
+            locationHistory,
+            selectedAccuracy,
+            interval,
+            totalDistance,
+            lastLocation,
+        )
         locationManager.requestLocationUpdates(
             if (locationManager.allProviders.contains(selectedAccuracy)) {
                 selectedAccuracy
@@ -78,10 +126,27 @@ class LocationTrackingService() : Service() {
             0F,
             listener,
         )
+
+        var timePassed = 0
+        durationTimer = timer(
+            initialDelay = 0,
+            period = interval.toLong(),
+        ) {
+            timePassed += interval
+
+            EventBus.getDefault()
+                .post(
+                    LocationServiceUpdate(
+                        newDistance = null,
+                        newTime = "${timePassed.toDuration(DurationUnit.MILLISECONDS)}",
+                    ),
+                )
+        }
     }
 
     private fun stopTracking() {
         locationManager.removeUpdates(listener)
+        durationTimer?.cancel()
     }
 
     @SuppressLint("MissingPermission") // TODO: fix
@@ -91,39 +156,17 @@ class LocationTrackingService() : Service() {
 
         intent?.action?.let {
             when {
-                it == "start" -> {
+                it.startsWith("start") -> {
+                    when (it.split("/").last()) {
+                        "low" -> selectedAccuracy = "passive"
+                        "mid" -> selectedAccuracy = "network"
+                        "high" -> selectedAccuracy =
+                            if (locationManager.isProviderEnabled("gps")) "gps" else "fused"
+                    }
+
                     startAsForegroundService()
 
                     startTracking()
-
-//                    mainHandler.post(object : Runnable {
-//                        @SuppressLint("MissingPermission") // TODO: fix
-//                        override fun run() {
-//                            if (!isServiceRunning) return
-////
-////                            var text = "Location data [$selectedAccuracy]:"
-////
-////                            for (a in locationManager.allProviders) {
-////                                val location = locationManager.getLastKnownLocation(a)
-////                                text += "\n${a}: ${location?.latitude} : ${location?.longitude}"
-////                            }
-//
-//                            val location = locationManager.getLastKnownLocation(
-//                                if (locationManager.allProviders.contains(selectedAccuracy)) {
-//                                    selectedAccuracy
-//                                } else {
-//                                    locationManager.allProviders.first()
-//                                }
-//                            )
-//                            Log.d(
-//                                "STILL RUNNING HERE",
-//                                "accuracy: $selectedAccuracy, interval: $interval\nlocation: ${location?.latitude} / ${location?.longitude}"
-//                            )
-//                            if (location != null) locationHistory.add(location)
-//
-//                            mainHandler.postDelayed(this, interval.toLong())
-//                        }
-//                    })
                 }
 
                 it == "stop" -> {
@@ -158,31 +201,28 @@ class LocationTrackingService() : Service() {
                     Log.d("GPX FILE HERE", "$gpxType")
 
 
-                    if(!File("${baseContext.filesDir.absolutePath}/saved_routes").exists()) {
+                    if (!File("${baseContext.filesDir.absolutePath}/saved_routes").exists()) {
                         Files.createDirectory(Path("${baseContext.filesDir.absolutePath}/saved_routes"))
                     }
 
-                    val file = File("${baseContext.filesDir.absolutePath}/saved_routes", "tracking_data_${Instant.now()}.gpx")
+                    val file = File(
+                        "${baseContext.filesDir.absolutePath}/saved_routes",
+                        "tracking_data_${Instant.now()}.gpx"
+                    )
                     val fw = FileWriter(file.absoluteFile)
                     val bw = BufferedWriter(fw)
                     bw.write(gpxType)
                     bw.close()
 
-                    Log.d("HERE NEW FILE SAVED", "current file list:${File("${baseContext.filesDir.absolutePath}/saved_routes").listFiles()?.map { "\n" + it.name }}")
+                    Log.d(
+                        "HERE NEW FILE SAVED",
+                        "current file list:${
+                            File("${baseContext.filesDir.absolutePath}/saved_routes").listFiles()
+                                ?.map { "\n" + it.name }
+                        }"
+                    )
 
                     stopForegroundService()
-                }
-
-                it.startsWith("accuracy") -> {
-                    stopTracking()
-                    selectedAccuracy = it.split("/").last()
-                    startTracking()
-                }
-
-                it.startsWith("interval") -> {
-                    stopTracking()
-                    interval = it.split("/").last().toIntOrNull() ?: 1000
-                    startTracking()
                 }
 
                 else -> Unit
