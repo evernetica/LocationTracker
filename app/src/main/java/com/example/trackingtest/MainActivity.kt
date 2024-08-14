@@ -80,12 +80,8 @@ import org.greenrobot.eventbus.Subscribe
 import org.greenrobot.eventbus.ThreadMode
 import java.io.File
 
-
 //TODO: ask for location permission (x2)
 //TODO: ask for foreground permission
-
-//TODO: save state on screen change
-//TODO: select accuracy before foreground service starts
 
 class LocationServiceUpdate(val newDistance: String?, val newTime: String?)
 
