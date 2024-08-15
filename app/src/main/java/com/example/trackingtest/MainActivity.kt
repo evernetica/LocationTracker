@@ -3,6 +3,7 @@
 package com.example.trackingtest
 
 import android.annotation.SuppressLint
+import android.app.ActivityManager
 import android.content.ContentValues
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -119,6 +120,16 @@ class MainActivity : ComponentActivity() {
         MutableLiveData<LocationServiceUpdate>()
     }
 
+    private fun isMyServiceRunning(serviceClass: Class<*>): Boolean {
+        val manager = getSystemService(ACTIVITY_SERVICE) as ActivityManager
+        for (service in manager.getRunningServices(Int.MAX_VALUE)) {
+            if (serviceClass.name == service.service.className) {
+                return true
+            }
+        }
+        return false
+    }
+
 
     @Subscribe(threadMode = ThreadMode.MAIN)
     fun onMessageEvent(event: LocationServiceUpdate?) {
@@ -147,6 +158,9 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
 
+            var serviceStarted by remember {
+                mutableStateOf(isMyServiceRunning(LocationTrackingService::class.java)/*LocationTrackingService().LocalBinder().getService().isRunning()*/)
+            }
             Log.d("INTENT HERE", "${intent.flags}\n${intent.action}\n$intent")
 
             val requestPermissionLauncher = rememberLauncherForActivityResult(
@@ -160,7 +174,14 @@ class MainActivity : ComponentActivity() {
             val navController = rememberNavController()
 
             NavHost(navController = navController, startDestination = Routes.TRACKER) {
-                composable(route = Routes.TRACKER) { TrackerScreen(navController, liveRouteData) }
+                composable(route = Routes.TRACKER) {
+                    TrackerScreen(
+                        navController,
+                        liveRouteData,
+                        serviceStartedValue = serviceStarted,
+                        serviceStartedSet = { newValue -> serviceStarted = newValue },
+                    )
+                }
                 composable(
                     route = Routes.SAVED_ROUTES,
                     enterTransition = {
@@ -179,14 +200,15 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+
 @Composable
 fun TrackerScreen(
     navController: NavController,
-    liveRouteData: MutableLiveData<LocationServiceUpdate>
+    liveRouteData: MutableLiveData<LocationServiceUpdate>,
+    serviceStartedValue: Boolean,
+    serviceStartedSet: (Boolean) -> Unit,
 ) {
-    var serviceStarted by remember {
-        mutableStateOf(LocationTrackingService().LocalBinder().getService().isRunning())
-    }
+
 
     TrackingTestTheme {
         Scaffold(
@@ -196,7 +218,7 @@ fun TrackerScreen(
                     title = { Text("Location Tracking") },
                     actions = {
                         Button(
-                            enabled = !serviceStarted,
+                            enabled = !serviceStartedValue,
                             modifier = Modifier.size(48.dp),
                             shape = RoundedCornerShape(4.dp),
                             contentPadding = PaddingValues(8.dp),
@@ -220,8 +242,8 @@ fun TrackerScreen(
             LocationFragment(
                 modifier = Modifier.padding(innerPadding),
                 liveRouteData = liveRouteData,
-                serviceStartedSet = { newValue -> serviceStarted = newValue },
-                serviceStartedValue = serviceStarted,
+                serviceStartedSet = serviceStartedSet,
+                serviceStartedValue = serviceStartedValue,
             )
         }
     }

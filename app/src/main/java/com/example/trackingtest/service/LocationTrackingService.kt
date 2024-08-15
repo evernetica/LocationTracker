@@ -35,6 +35,7 @@ import kotlin.io.path.Path
 import kotlin.time.DurationUnit
 import kotlin.time.toDuration
 
+
 class LocationTrackingService() : Service() {
     private val binder = LocalBinder()
 
@@ -53,6 +54,7 @@ class LocationTrackingService() : Service() {
         0,
         mutableFloatStateOf(0F),
         mutableStateOf(null),
+        isServiceRunning = { isRunning() },
     )
 
     private var selectedAccuracy = "default"
@@ -66,7 +68,7 @@ class LocationTrackingService() : Service() {
         fun getService(): LocationTrackingService = this@LocationTrackingService
     }
 
-    fun isRunning(): Boolean {
+    private fun isRunning(): Boolean {
         return durationTimer != null
     }
 
@@ -80,8 +82,11 @@ class LocationTrackingService() : Service() {
         private val interval: Int,
         private var mutableDistance: MutableFloatState,
         private var mutableLastLocation: MutableState<Location?>,
+        private val isServiceRunning: () -> Boolean,
     ) : LocationListener {
         override fun onLocationChanged(location: Location) {
+            if (!isServiceRunning()) return
+
             Log.d(
                 "STILL RUNNING HERE",
                 "accuracy: $selectedAccuracy, interval: $interval\nlocation: ${location.latitude} / ${location.longitude}"
@@ -110,6 +115,7 @@ class LocationTrackingService() : Service() {
             interval,
             totalDistance,
             lastLocation,
+            isServiceRunning = { isRunning() }
         )
         locationManager.requestLocationUpdates(
             if (locationManager.allProviders.contains(selectedAccuracy)) {
