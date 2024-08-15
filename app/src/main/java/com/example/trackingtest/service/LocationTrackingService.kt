@@ -11,15 +11,10 @@ import android.os.Binder
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
-import androidx.compose.foundation.pager.PagerSnapDistance
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.MutableFloatState
-import androidx.compose.runtime.MutableIntState
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.text.toLowerCase
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.example.trackingtest.LocationServiceUpdate
@@ -34,15 +29,11 @@ import java.io.File
 import java.io.FileWriter
 import java.nio.file.Files
 import java.time.Instant
-import java.util.Locale
 import java.util.Timer
 import kotlin.concurrent.timer
 import kotlin.io.path.Path
 import kotlin.time.DurationUnit
 import kotlin.time.toDuration
-
-
-// EventBus.getDefault().post(LocationServiceUpdate(null, null))
 
 class LocationTrackingService() : Service() {
     private val binder = LocalBinder()
@@ -73,6 +64,10 @@ class LocationTrackingService() : Service() {
 
     inner class LocalBinder : Binder() {
         fun getService(): LocationTrackingService = this@LocationTrackingService
+    }
+
+    fun isRunning(): Boolean {
+        return durationTimer != null
     }
 
     override fun onBind(intent: Intent?): IBinder {

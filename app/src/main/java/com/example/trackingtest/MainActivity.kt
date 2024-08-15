@@ -5,14 +5,17 @@ package com.example.trackingtest
 import android.annotation.SuppressLint
 import android.content.ContentValues
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.slideIn
 import androidx.compose.animation.slideOut
 import androidx.compose.foundation.BorderStroke
@@ -46,6 +49,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -65,6 +69,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.core.content.ContextCompat.startForegroundService
 import androidx.lifecycle.MutableLiveData
 import androidx.navigation.NavController
@@ -82,10 +87,6 @@ import org.greenrobot.eventbus.EventBus
 import org.greenrobot.eventbus.Subscribe
 import org.greenrobot.eventbus.ThreadMode
 import java.io.File
-
-//TODO: ask for location permission (x2)
-//TODO: ask for foreground permission
-//TODO: ask for storage permission
 
 class LocationServiceUpdate(val newDistance: String?, val newTime: String?)
 
@@ -145,6 +146,17 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
+
+            Log.d("INTENT HERE", "${intent.flags}\n${intent.action}\n$intent")
+
+            val requestPermissionLauncher = rememberLauncherForActivityResult(
+                ActivityResultContracts.RequestPermission()
+            ) { _ -> }
+
+            SideEffect {
+                requestPermissionLauncher.launch(android.Manifest.permission.ACCESS_FINE_LOCATION)
+            }
+
             val navController = rememberNavController()
 
             NavHost(navController = navController, startDestination = Routes.TRACKER) {
@@ -173,7 +185,7 @@ fun TrackerScreen(
     liveRouteData: MutableLiveData<LocationServiceUpdate>
 ) {
     var serviceStarted by remember {
-        mutableStateOf(false)
+        mutableStateOf(LocationTrackingService().LocalBinder().getService().isRunning())
     }
 
     TrackingTestTheme {
@@ -381,6 +393,17 @@ fun LocationFragment(
 ) {
     val context = LocalContext.current
 
+
+    var permissionGranted = ContextCompat.checkSelfPermission(
+        context,
+        android.Manifest.permission.POST_NOTIFICATIONS
+    ) == PackageManager.PERMISSION_GRANTED
+
+
+    val requestPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted -> permissionGranted = isGranted }
+
     var travelDuration by remember {
         mutableStateOf("-")
     }
@@ -429,9 +452,23 @@ fun LocationFragment(
                 border = BorderStroke(1.dp, Color.Gray),
                 onClick = {
                     Log.d("CLICK HERE", "$serviceStartedValue")
+
                     if (serviceStartedValue) {
                         showDialog = true
                     } else {
+                        if (!permissionGranted) {
+                            requestPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                        }
+
+                        if (!permissionGranted) {
+                            Toast.makeText(
+                                context,
+                                "Please, enable notifications in app settings",
+                                Toast.LENGTH_LONG
+                            ).show()
+                            return@Button
+                        }
+
                         val intent = Intent(context, LocationTrackingService::class.java)
                         intent.setAction("start/${dropdownValue.getAccuracyValue()}")
                         startForegroundService(context, intent)
