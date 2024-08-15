@@ -70,6 +70,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.app.ActivityOptionsCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.ContextCompat.startForegroundService
 import androidx.lifecycle.MutableLiveData
@@ -415,17 +416,6 @@ fun LocationFragment(
 ) {
     val context = LocalContext.current
 
-
-    var permissionGranted = ContextCompat.checkSelfPermission(
-        context,
-        android.Manifest.permission.POST_NOTIFICATIONS
-    ) == PackageManager.PERMISSION_GRANTED
-
-
-    val requestPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { isGranted -> permissionGranted = isGranted }
-
     var travelDuration by remember {
         mutableStateOf("-")
     }
@@ -462,6 +452,25 @@ fun LocationFragment(
                 mutableStateOf(DropdownValues.Low)
             }
 
+            val requestPermissionLauncher = rememberLauncherForActivityResult(
+                ActivityResultContracts.RequestPermission()
+            ) { isGranted ->
+
+                if (isGranted) {
+                    val intent = Intent(context, LocationTrackingService::class.java)
+                    intent.setAction("start/${dropdownValue.getAccuracyValue()}")
+                    startForegroundService(context, intent)
+
+                    serviceStartedSet(true)
+                } else {
+                    Toast.makeText(
+                        context,
+                        "Please, enable notifications in app settings",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            }
+
             Button(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -478,24 +487,11 @@ fun LocationFragment(
                     if (serviceStartedValue) {
                         showDialog = true
                     } else {
-                        if (!permissionGranted) {
-                            requestPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
-                        }
 
-                        if (!permissionGranted) {
-                            Toast.makeText(
-                                context,
-                                "Please, enable notifications in app settings",
-                                Toast.LENGTH_LONG
-                            ).show()
-                            return@Button
-                        }
+                        requestPermissionLauncher.launch(
+                            android.Manifest.permission.POST_NOTIFICATIONS
+                        )
 
-                        val intent = Intent(context, LocationTrackingService::class.java)
-                        intent.setAction("start/${dropdownValue.getAccuracyValue()}")
-                        startForegroundService(context, intent)
-
-                        serviceStartedSet(true)
                     }
                 }
             ) {
