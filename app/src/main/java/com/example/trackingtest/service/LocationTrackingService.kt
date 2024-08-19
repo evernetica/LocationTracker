@@ -117,16 +117,6 @@ class LocationTrackingService() : Service() {
             lastLocation,
             isServiceRunning = { isRunning() }
         )
-        locationManager.requestLocationUpdates(
-            if (locationManager.allProviders.contains(selectedAccuracy)) {
-                selectedAccuracy
-            } else {
-                locationManager.allProviders.first()
-            },
-            interval.toLong(),
-            0F,
-            listener,
-        )
 
         var timePassed = 0
         durationTimer = timer(
@@ -143,11 +133,22 @@ class LocationTrackingService() : Service() {
                     ),
                 )
         }
+
+        locationManager.requestLocationUpdates(
+            if (locationManager.allProviders.contains(selectedAccuracy)) {
+                selectedAccuracy
+            } else {
+                locationManager.allProviders.first()
+            },
+            interval.toLong(),
+            0F,
+            listener,
+        )
     }
 
     private fun stopTracking() {
-        locationManager.removeUpdates(listener)
         durationTimer?.cancel()
+        locationManager.removeUpdates(listener)
     }
 
     @SuppressLint("MissingPermission") // TODO: fix

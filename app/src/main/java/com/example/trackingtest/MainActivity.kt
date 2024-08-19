@@ -1,4 +1,4 @@
-@file:OptIn(ExperimentalMaterial3Api::class)
+@file:OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3Api::class)
 
 package com.example.trackingtest
 
@@ -7,6 +7,7 @@ import android.app.ActivityManager
 import android.content.ContentValues
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
@@ -328,38 +329,78 @@ fun SavedRoutesScreen(navController: NavController) {
                                         )
                                     }
 
+                                    val requestStoragePermissionLauncher =
+                                        rememberLauncherForActivityResult(
+                                            ActivityResultContracts.RequestPermission()
+                                        ) { isGranted ->
+
+                                            if (isGranted) {
+                                                val downloadsDir =
+                                                    Environment.getExternalStoragePublicDirectory(
+                                                        Environment.DIRECTORY_DOWNLOADS
+                                                    )
+                                                val targetDir =
+                                                    File(downloadsDir.absolutePath + "/saved_routes/")
+                                                if (!targetDir.exists()) targetDir.mkdirs()
+
+                                                val targetFile =
+                                                    File(targetDir.absolutePath + "/" + file.name)
+                                                targetFile.createNewFile()
+                                                targetFile.writeBytes(file.readBytes())
+
+                                                Toast.makeText(
+                                                    context,
+                                                    "File saved to \"Downloads/saved_routes/\"",
+                                                    Toast.LENGTH_LONG,
+                                                ).show()
+                                            } else {
+                                                Toast.makeText(
+                                                    context,
+                                                    "Please, grant storage permission in app settings",
+                                                    Toast.LENGTH_LONG
+                                                ).show()
+                                            }
+                                        }
+
                                     Button(
                                         onClick = {
-                                            val resolver = context.contentResolver
-                                            val values = ContentValues()
+                                            if (Build.VERSION.SDK_INT <= 28) {
+                                                requestStoragePermissionLauncher.launch(
+                                                    android.Manifest.permission.WRITE_EXTERNAL_STORAGE
+                                                )
+                                            } else {
+                                                val resolver = context.contentResolver
+                                                val values = ContentValues()
 
-                                            values.put(
-                                                MediaStore.MediaColumns.DISPLAY_NAME,
-                                                file.name
-                                            )
-                                            values.put(
-                                                MediaStore.MediaColumns.MIME_TYPE,
-                                                "application/my-custom-type"
-                                            )
-                                            values.put(
-                                                MediaStore.MediaColumns.RELATIVE_PATH,
-                                                Environment.DIRECTORY_DOWNLOADS + "/" + "saved_routes"
-                                            )
-                                            val uri = resolver.insert(
-                                                MediaStore.Files.getContentUri("external"),
-                                                values
-                                            )
+                                                values.put(
+                                                    MediaStore.MediaColumns.DISPLAY_NAME,
+                                                    file.name
+                                                )
+                                                values.put(
+                                                    MediaStore.MediaColumns.MIME_TYPE,
+                                                    "application/my-custom-type"
+                                                )
+                                                values.put(
+                                                    MediaStore.MediaColumns.RELATIVE_PATH,
+                                                    Environment.DIRECTORY_DOWNLOADS + "/" + "saved_routes"
+                                                )
 
-                                            val outputStream = resolver.openOutputStream(uri!!)
+                                                val uri = resolver.insert(
+                                                    MediaStore.Files.getContentUri("external"),
+                                                    values
+                                                )
 
-                                            outputStream?.write(file.readBytes())
-                                            outputStream?.close()
+                                                val outputStream = resolver.openOutputStream(uri!!)
 
-                                            Toast.makeText(
-                                                context,
-                                                "File saved to \"Downloads/saved_routes/\"",
-                                                Toast.LENGTH_LONG,
-                                            ).show()
+                                                outputStream?.write(file.readBytes())
+                                                outputStream?.close()
+
+                                                Toast.makeText(
+                                                    context,
+                                                    "File saved to \"Downloads/saved_routes/\"",
+                                                    Toast.LENGTH_LONG,
+                                                ).show()
+                                            }
                                         },
                                         shape = RectangleShape,
                                         modifier = Modifier
