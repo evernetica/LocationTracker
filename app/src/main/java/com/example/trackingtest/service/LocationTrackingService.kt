@@ -96,7 +96,14 @@ class LocationTrackingService() : Service() {
                 mutableDistance.floatValue += location.distanceTo(mutableLastLocation.value!!)
                 EventBus.getDefault().post(
                     LocationServiceUpdate(
-                        newDistance = "${"%.2f".format(mutableDistance.floatValue / 1000)} km",
+                        newDistance = "${"%.2f".format(mutableDistance.floatValue / 1000)} km [${locationHistory.size + 1} waypoint(s)]",
+                        newTime = null,
+                    )
+                )
+            } else {
+                EventBus.getDefault().post(
+                    LocationServiceUpdate(
+                        newDistance = "0.00 km [1 waypoint(s)]",
                         newTime = null,
                     )
                 )
@@ -134,14 +141,27 @@ class LocationTrackingService() : Service() {
                 )
         }
 
+        Log.d(
+            "HERE PROVIDERS",
+            "${locationManager.allProviders.size}: ${locationManager.allProviders}\n\n$selectedAccuracy -> ${
+                if (locationManager.allProviders.contains(selectedAccuracy)) {
+                    selectedAccuracy
+                } else {
+                    locationManager.allProviders.last()
+                }
+            }"
+        )
+
         locationManager.requestLocationUpdates(
             if (locationManager.allProviders.contains(selectedAccuracy)) {
                 selectedAccuracy
+            } else if (locationManager.allProviders.contains("network")) {
+                "network"
             } else {
-                locationManager.allProviders.first()
+                locationManager.allProviders.last()
             },
             interval.toLong(),
-            0F,
+            1F,
             listener,
         )
     }
