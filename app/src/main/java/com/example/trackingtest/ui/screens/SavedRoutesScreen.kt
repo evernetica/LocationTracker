@@ -22,6 +22,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -75,6 +76,7 @@ fun SavedRoutesScreen(navController: NavController) {
 								ImageBitmap.imageResource(id = R.drawable.back),
 								"",
 								modifier = Modifier.fillMaxSize(),
+								tint = MaterialTheme.colorScheme.inverseSurface,
 							)
 						}
 					},
@@ -125,6 +127,7 @@ fun SavedRoutesScreen(navController: NavController) {
 										Icon(
 											bitmap = ImageBitmap.imageResource(R.drawable.delete),
 											"",
+											tint = MaterialTheme.colorScheme.surface,
 										)
 									}
 
@@ -209,6 +212,7 @@ fun SavedRoutesScreen(navController: NavController) {
 										Icon(
 											bitmap = ImageBitmap.imageResource(R.drawable.share),
 											"",
+											tint = MaterialTheme.colorScheme.surface,
 										)
 									}
 								}

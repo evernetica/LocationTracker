@@ -354,14 +354,15 @@ fun LocationFragment(
 					mutableStateOf(false)
 				}
 
+				val underlineColor = MaterialTheme.colorScheme.primary
 				Button(
 					enabled = !serviceStartedValue,
 					onClick = {
 						dropdownState = !dropdownState
 					},
 					colors = ButtonDefaults.buttonColors(
-						containerColor = Color.LightGray,
-						contentColor = Color.Black,
+						containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+						contentColor = MaterialTheme.colorScheme.onSurface,
 					),
 					shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
 					border = BorderStroke(1.dp, Color.Gray),
@@ -373,7 +374,7 @@ fun LocationFragment(
 
 							drawContent()
 							drawLine(
-								Color.Blue,
+								underlineColor,
 								Offset(0f, y),
 								Offset(size.width, y),
 								strokeWidth
@@ -388,7 +389,7 @@ fun LocationFragment(
 							"Accuracy",
 							style = MaterialTheme.typography.titleSmall.merge(
 								fontSize = 10.sp,
-								color = Color.Blue,
+								color = MaterialTheme.colorScheme.primary,
 							),
 							modifier = Modifier.padding(bottom = 8.dp)
 						)
@@ -401,19 +402,34 @@ fun LocationFragment(
 					expanded = dropdownState,
 					onDismissRequest = { dropdownState = !dropdownState }) {
 					DropdownMenuItem(
-						text = { Text(DropdownValues.Low.getDisplayName()) },
+						text = {
+							Text(
+								DropdownValues.Low.getDisplayName(),
+								color = MaterialTheme.colorScheme.inverseSurface,
+							)
+						},
 						onClick = {
 							dropdownValue = DropdownValues.Low
 							dropdownState = false
 						})
 					DropdownMenuItem(
-						text = { Text(DropdownValues.Mid.getDisplayName()) },
+						text = {
+							Text(
+								DropdownValues.Mid.getDisplayName(),
+								color = MaterialTheme.colorScheme.inverseSurface,
+							)
+						},
 						onClick = {
 							dropdownValue = DropdownValues.Mid
 							dropdownState = false
 						})
 					DropdownMenuItem(
-						text = { Text(DropdownValues.High.getDisplayName()) },
+						text = {
+							Text(
+								DropdownValues.High.getDisplayName(),
+								color = MaterialTheme.colorScheme.inverseSurface,
+							)
+						},
 						onClick = {
 							dropdownValue = DropdownValues.High
 							dropdownState = false
