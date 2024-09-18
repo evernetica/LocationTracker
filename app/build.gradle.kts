@@ -47,7 +47,9 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+    testOptions { unitTests.all { it.useJUnitPlatform() } }
 }
+
 
 dependencies {
 
@@ -62,6 +64,7 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.compose.material)
     testImplementation(libs.junit)
+    testImplementation("org.junit.jupiter:junit-jupiter:5.8.1")
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
@@ -69,6 +72,8 @@ dependencies {
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
     implementation (libs.gpxandroidsdk)
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
-    implementation("org.greenrobot:eventbus:3.3.1")
+    implementation(libs.kotlinx.serialization.json)
+    implementation(libs.eventbus)
+    testImplementation(libs.kotlin.test)
+    testImplementation(libs.junit.v413)
 }

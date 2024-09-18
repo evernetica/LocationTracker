@@ -5,14 +5,11 @@ import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.location.Location
-import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
-import androidx.compose.runtime.MutableFloatState
-import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.core.app.ServiceCompat
@@ -74,44 +71,6 @@ class LocationTrackingService() : Service() {
 
     override fun onBind(intent: Intent?): IBinder {
         return binder
-    }
-
-    class MyLocationListener(
-        private val locationHistory: MutableList<Location>,
-        private val selectedAccuracy: String,
-        private val interval: Int,
-        private var mutableDistance: MutableFloatState,
-        private var mutableLastLocation: MutableState<Location?>,
-        private val isServiceRunning: () -> Boolean,
-    ) : LocationListener {
-        override fun onLocationChanged(location: Location) {
-            if (!isServiceRunning()) return
-
-            Log.d(
-                "STILL RUNNING HERE",
-                "accuracy: $selectedAccuracy, interval: $interval\nlocation: ${location.latitude} / ${location.longitude}"
-            )
-
-            if (mutableLastLocation.value != null) {
-                mutableDistance.floatValue += location.distanceTo(mutableLastLocation.value!!)
-                EventBus.getDefault().post(
-                    LocationServiceUpdate(
-                        newDistance = "${"%.2f".format(mutableDistance.floatValue / 1000)} km [${locationHistory.size + 1} waypoint(s)]",
-                        newTime = null,
-                    )
-                )
-            } else {
-                EventBus.getDefault().post(
-                    LocationServiceUpdate(
-                        newDistance = "0.00 km [1 waypoint(s)]",
-                        newTime = null,
-                    )
-                )
-            }
-            mutableLastLocation.value = location
-
-            locationHistory.add(location)
-        }
     }
 
     @SuppressLint("MissingPermission") // TODO: fix
