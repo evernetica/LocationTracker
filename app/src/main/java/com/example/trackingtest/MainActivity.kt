@@ -84,6 +84,8 @@ import androidx.wear.compose.foundation.RevealValue
 import androidx.wear.compose.foundation.SwipeToReveal
 import androidx.wear.compose.foundation.rememberRevealState
 import com.example.trackingtest.service.LocationTrackingService
+import com.example.trackingtest.ui.screens.SavedRoutesScreen
+import com.example.trackingtest.ui.screens.TrackerScreen
 import com.example.trackingtest.ui.theme.TrackingTestTheme
 import kotlinx.coroutines.launch
 import org.greenrobot.eventbus.EventBus
@@ -94,576 +96,348 @@ import java.io.File
 class LocationServiceUpdate(val newDistance: String?, val newTime: String?)
 
 enum class DropdownValues {
-    Low,
-    Mid,
-    High;
+	Low,
+	Mid,
+	High;
 
-    fun getDisplayName(): String {
-        return when (this) {
-            Low -> "Low"
-            Mid -> "Medium"
-            High -> "High"
-        }
-    }
+	fun getDisplayName(): String {
+		return when (this) {
+			Low -> "Low"
+			Mid -> "Medium"
+			High -> "High"
+		}
+	}
 
-    fun getAccuracyValue(): String {
-        return when (this) {
-            Low -> "low"
-            Mid -> "medium"
-            High -> "high"
-        }
-    }
+	fun getAccuracyValue(): String {
+		return when (this) {
+			Low -> "low"
+			Mid -> "medium"
+			High -> "high"
+		}
+	}
 }
 
 
 class MainActivity : ComponentActivity() {
 
-    private val liveRouteData: MutableLiveData<LocationServiceUpdate> by lazy {
-        MutableLiveData<LocationServiceUpdate>()
-    }
+	private val liveRouteData: MutableLiveData<LocationServiceUpdate> by lazy {
+		MutableLiveData<LocationServiceUpdate>()
+	}
 
-    private fun isMyServiceRunning(serviceClass: Class<*>): Boolean {
-        val manager = getSystemService(ACTIVITY_SERVICE) as ActivityManager
-        for (service in manager.getRunningServices(Int.MAX_VALUE)) {
-            if (serviceClass.name == service.service.className) {
-                return true
-            }
-        }
-        return false
-    }
-
-
-    @Subscribe(threadMode = ThreadMode.MAIN)
-    fun onMessageEvent(event: LocationServiceUpdate?) {
-        liveRouteData.value = event
-    }
-
-    override fun onStart() {
-        super.onStart()
-        EventBus.getDefault().register(this)
-    }
-
-    override fun onStop() {
-        super.onStop()
-        EventBus.getDefault().unregister(this)
-    }
-
-    abstract class Routes {
-        companion object {
-            const val TRACKER = "tracker"
-            const val SAVED_ROUTES = "savedRoutes"
-        }
-    }
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
-        setContent {
-
-            var serviceStarted by remember {
-                mutableStateOf(isMyServiceRunning(LocationTrackingService::class.java)/*LocationTrackingService().LocalBinder().getService().isRunning()*/)
-            }
-            Log.d("INTENT HERE", "${intent.flags}\n${intent.action}\n$intent")
-
-            val requestPermissionLauncher = rememberLauncherForActivityResult(
-                ActivityResultContracts.RequestPermission()
-            ) { _ -> }
-
-            SideEffect {
-                requestPermissionLauncher.launch(android.Manifest.permission.ACCESS_FINE_LOCATION)
-            }
-
-            val navController = rememberNavController()
-
-            NavHost(navController = navController, startDestination = Routes.TRACKER) {
-                composable(route = Routes.TRACKER) {
-                    TrackerScreen(
-                        navController,
-                        liveRouteData,
-                        serviceStartedValue = serviceStarted,
-                        serviceStartedSet = { newValue -> serviceStarted = newValue },
-                    )
-                }
-                composable(
-                    route = Routes.SAVED_ROUTES,
-                    enterTransition = {
-                        slideIn(
-                            initialOffset = { offset -> IntOffset(offset.width, 0) },
-                        )
-                    },
-                    exitTransition = {
-                        slideOut(
-                            targetOffset = { offset -> IntOffset(offset.width, 0) },
-                        )
-                    },
-                ) { SavedRoutesScreen(navController) }
-            }
-        }
-    }
-}
+	private fun isMyServiceRunning(serviceClass: Class<*>): Boolean {
+		val manager = getSystemService(ACTIVITY_SERVICE) as ActivityManager
+		for (service in manager.getRunningServices(Int.MAX_VALUE)) {
+			if (serviceClass.name == service.service.className) {
+				return true
+			}
+		}
+		return false
+	}
 
 
-@Composable
-fun TrackerScreen(
-    navController: NavController,
-    liveRouteData: MutableLiveData<LocationServiceUpdate>,
-    serviceStartedValue: Boolean,
-    serviceStartedSet: (Boolean) -> Unit,
-) {
+	@Subscribe(threadMode = ThreadMode.MAIN)
+	fun onMessageEvent(event: LocationServiceUpdate?) {
+		liveRouteData.value = event
+	}
 
+	override fun onStart() {
+		super.onStart()
+		EventBus.getDefault().register(this)
+	}
 
-    TrackingTestTheme {
-        Scaffold(
-            modifier = Modifier.fillMaxSize(),
-            topBar = {
-                TopAppBar(
-                    title = { Text("Location Tracking") },
-                    actions = {
-                        Button(
-                            enabled = !serviceStartedValue,
-                            modifier = Modifier.size(48.dp),
-                            shape = RoundedCornerShape(4.dp),
-                            contentPadding = PaddingValues(8.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color.Transparent,
-                                contentColor = Color.Black,
-                            ),
-                            onClick = {
-                                navController.navigate(MainActivity.Routes.SAVED_ROUTES)
-                            }) {
-                            Icon(
-                                ImageBitmap.imageResource(id = R.drawable.history_edu_icon),
-                                "",
-                                modifier = Modifier.fillMaxSize(),
-                            )
-                        }
-                    },
-                )
-            },
-        ) { innerPadding ->
-            LocationFragment(
-                modifier = Modifier.padding(innerPadding),
-                liveRouteData = liveRouteData,
-                serviceStartedSet = serviceStartedSet,
-                serviceStartedValue = serviceStartedValue,
-            )
-        }
-    }
-}
+	override fun onStop() {
+		super.onStop()
+		EventBus.getDefault().unregister(this)
+	}
 
-@OptIn(ExperimentalWearFoundationApi::class)
-@Composable
-fun SavedRoutesScreen(navController: NavController) {
-    TrackingTestTheme {
-        Scaffold(
-            modifier = Modifier.fillMaxSize(),
-            topBar = {
-                TopAppBar(
-                    title = {},
-                    navigationIcon = {
-                        Button(
-                            modifier = Modifier.size(48.dp),
-                            shape = RoundedCornerShape(4.dp),
-                            contentPadding = PaddingValues(8.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color.Transparent,
-                                contentColor = Color.Black,
-                            ),
-                            onClick = {
-                                navController.popBackStack()
-                            }) {
-                            Icon(
-                                ImageBitmap.imageResource(id = R.drawable.back),
-                                "",
-                                modifier = Modifier.fillMaxSize(),
-                            )
-                        }
-                    },
-                )
-            },
-        )
-        { innerPadding ->
-            Box(modifier = Modifier.padding(innerPadding)) {
-                val context = LocalContext.current
-                var fileList by remember {
-                    mutableStateOf(
-                        File("${context.filesDir.absolutePath}/saved_routes").listFiles()?.toList()
-                    )
-                }
+	abstract class Routes {
+		companion object {
+			const val TRACKER = "tracker"
+			const val SAVED_ROUTES = "savedRoutes"
+		}
+	}
 
-                Column(
-                    modifier = Modifier.verticalScroll(rememberScrollState()),
-                ) {
-                    fileList?.map { file ->
-                        val coroutineScope = rememberCoroutineScope()
-                        val swipeState = rememberRevealState(
-                            anchors = mapOf(
-                                RevealValue.Covered to 0F,
-                                RevealValue.Revealing to 0.4F,
-                            )
-                        )
+	override fun onCreate(savedInstanceState: Bundle?) {
+		super.onCreate(savedInstanceState)
+		enableEdgeToEdge()
+		setContent {
 
-                        SwipeToReveal(
-                            state = swipeState,
-                            primaryAction = {
-                                Row {
-                                    Button(
-                                        onClick = {
-                                            coroutineScope.launch {
-                                                swipeState.snapTo(RevealValue.Covered)
-                                                fileList = fileList?.minus(file)
-                                                file.delete()
-                                            }
-                                        },
-                                        shape = RectangleShape,
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = Color.Red,
-                                        ),
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .weight(1f),
-                                    ) {
-                                        Icon(
-                                            bitmap = ImageBitmap.imageResource(R.drawable.delete),
-                                            "",
-                                        )
-                                    }
+			var serviceStarted by remember {
+				mutableStateOf(isMyServiceRunning(LocationTrackingService::class.java)/*LocationTrackingService().LocalBinder().getService().isRunning()*/)
+			}
+			Log.d("INTENT HERE", "${intent.flags}\n${intent.action}\n$intent")
 
-                                    val requestStoragePermissionLauncher =
-                                        rememberLauncherForActivityResult(
-                                            ActivityResultContracts.RequestPermission()
-                                        ) { isGranted ->
+			val requestPermissionLauncher = rememberLauncherForActivityResult(
+				ActivityResultContracts.RequestPermission()
+			) { _ -> }
 
-                                            if (isGranted) {
-                                                val downloadsDir =
-                                                    Environment.getExternalStoragePublicDirectory(
-                                                        Environment.DIRECTORY_DOWNLOADS
-                                                    )
-                                                val targetDir =
-                                                    File(downloadsDir.absolutePath + "/saved_routes/")
-                                                if (!targetDir.exists()) targetDir.mkdirs()
+			SideEffect {
+				requestPermissionLauncher.launch(android.Manifest.permission.ACCESS_FINE_LOCATION)
+			}
 
-                                                val targetFile =
-                                                    File(targetDir.absolutePath + "/" + file.name)
-                                                targetFile.createNewFile()
-                                                targetFile.writeBytes(file.readBytes())
+			val navController = rememberNavController()
 
-                                                Toast.makeText(
-                                                    context,
-                                                    "File saved to \"Downloads/saved_routes/\"",
-                                                    Toast.LENGTH_LONG,
-                                                ).show()
-                                            } else {
-                                                Toast.makeText(
-                                                    context,
-                                                    "Please, grant storage permission in app settings",
-                                                    Toast.LENGTH_LONG
-                                                ).show()
-                                            }
-                                        }
-
-                                    Button(
-                                        onClick = {
-                                            if (Build.VERSION.SDK_INT <= 28) {
-                                                requestStoragePermissionLauncher.launch(
-                                                    android.Manifest.permission.WRITE_EXTERNAL_STORAGE
-                                                )
-                                            } else {
-                                                val resolver = context.contentResolver
-                                                val values = ContentValues()
-
-                                                values.put(
-                                                    MediaStore.MediaColumns.DISPLAY_NAME,
-                                                    file.name
-                                                )
-                                                values.put(
-                                                    MediaStore.MediaColumns.MIME_TYPE,
-                                                    "application/my-custom-type"
-                                                )
-                                                values.put(
-                                                    MediaStore.MediaColumns.RELATIVE_PATH,
-                                                    Environment.DIRECTORY_DOWNLOADS + "/" + "saved_routes"
-                                                )
-
-                                                val uri = resolver.insert(
-                                                    MediaStore.Files.getContentUri("external"),
-                                                    values
-                                                )
-
-                                                val outputStream = resolver.openOutputStream(uri!!)
-
-                                                outputStream?.write(file.readBytes())
-                                                outputStream?.close()
-
-                                                Toast.makeText(
-                                                    context,
-                                                    "File saved to \"Downloads/saved_routes/\"",
-                                                    Toast.LENGTH_LONG,
-                                                ).show()
-                                            }
-                                        },
-                                        shape = RectangleShape,
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .weight(1f),
-                                    ) {
-                                        Icon(
-                                            bitmap = ImageBitmap.imageResource(R.drawable.share),
-                                            "",
-                                        )
-                                    }
-                                }
-                            }
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(16.dp),
-                            ) {
-                                Icon(
-                                    bitmap = ImageBitmap.imageResource(id = R.drawable.history_edu_icon),
-                                    "",
-                                    modifier = Modifier
-                                        .padding(8.dp)
-                                        .size(16.dp),
-                                )
-                                Text(
-                                    text = file.name,
-                                    modifier = Modifier.padding(8.dp),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                        }
-                        Divider(
-                            thickness = 1.dp,
-                            color = Color.LightGray,
-                        )
-                    }
-                }
-
-            }
-        }
-    }
+			NavHost(navController = navController, startDestination = Routes.TRACKER) {
+				composable(route = Routes.TRACKER) {
+					TrackerScreen(
+						navController,
+						liveRouteData,
+						serviceStartedValue = serviceStarted,
+						serviceStartedSet = { newValue -> serviceStarted = newValue },
+					)
+				}
+				composable(
+					route = Routes.SAVED_ROUTES,
+					enterTransition = {
+						slideIn(
+							initialOffset = { offset -> IntOffset(offset.width, 0) },
+						)
+					},
+					exitTransition = {
+						slideOut(
+							targetOffset = { offset -> IntOffset(offset.width, 0) },
+						)
+					},
+				) { SavedRoutesScreen(navController) }
+			}
+		}
+	}
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("MissingPermission")
 @Composable
 fun LocationFragment(
-    modifier: Modifier = Modifier,
-    liveRouteData: MutableLiveData<LocationServiceUpdate>,
-    serviceStartedSet: (Boolean) -> Unit,
-    serviceStartedValue: Boolean,
+	modifier: Modifier = Modifier,
+	liveRouteData: MutableLiveData<LocationServiceUpdate>,
+	serviceStartedSet: (Boolean) -> Unit,
+	serviceStartedValue: Boolean,
 ) {
-    val context = LocalContext.current
+	val context = LocalContext.current
 
-    var travelDuration by remember {
-        mutableStateOf("-")
-    }
+	var travelDuration by remember {
+		mutableStateOf("-")
+	}
 
-    var travelDistance by remember {
-        mutableStateOf("-")
-    }
+	var travelDistance by remember {
+		mutableStateOf("-")
+	}
 
-    liveRouteData.observe(LocalLifecycleOwner.current) {
-        if (it.newTime != null) travelDuration = it.newTime
-        if (it.newDistance != null) travelDistance = it.newDistance
-    }
+	liveRouteData.observe(LocalLifecycleOwner.current) {
+		if (it.newTime != null) travelDuration = it.newTime
+		if (it.newDistance != null) travelDistance = it.newDistance
+	}
 
-    Box {
-        Column(
-            modifier = modifier
-                .padding(8.dp)
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.SpaceBetween
-        ) {
-            Column {
-                Text("Travel Duration:", style = MaterialTheme.typography.titleMedium)
-                Text(travelDuration)
-                Text("Travel Distance:", style = MaterialTheme.typography.titleMedium)
-                Text(travelDistance)
-            }
+	Box {
+		Column(
+			modifier = modifier
+				.padding(8.dp)
+				.fillMaxSize()
+				.verticalScroll(rememberScrollState()),
+			verticalArrangement = Arrangement.SpaceBetween
+		) {
+			Column {
+				Text("Travel Duration:", style = MaterialTheme.typography.titleMedium)
+				Text(travelDuration)
+				Text("Travel Distance:", style = MaterialTheme.typography.titleMedium)
+				Text(travelDistance)
+			}
 
-            var showDialog by remember {
-                mutableStateOf(false)
-            }
+			var showDialog by remember {
+				mutableStateOf(false)
+			}
 
-            var dropdownValue by remember {
-                mutableStateOf(DropdownValues.Low)
-            }
+			var dropdownValue by remember {
+				mutableStateOf(DropdownValues.Low)
+			}
 
-            val requestPermissionLauncher = rememberLauncherForActivityResult(
-                ActivityResultContracts.RequestPermission()
-            ) { isGranted ->
+			val requestPermissionLauncher = rememberLauncherForActivityResult(
+				ActivityResultContracts.RequestPermission()
+			) { isGranted ->
 
-                if (isGranted) {
-                    val intent = Intent(context, LocationTrackingService::class.java)
-                    intent.setAction("start/${dropdownValue.getAccuracyValue()}")
-                    startForegroundService(context, intent)
+				if (isGranted) {
+					val intent = Intent(context, LocationTrackingService::class.java)
+					intent.setAction("start/${dropdownValue.getAccuracyValue()}")
+					startForegroundService(context, intent)
 
-                    serviceStartedSet(true)
-                } else {
-                    Toast.makeText(
-                        context,
-                        "Please, enable notifications in app settings",
-                        Toast.LENGTH_LONG
-                    ).show()
-                }
-            }
+					serviceStartedSet(true)
+				} else {
+					Toast.makeText(
+						context,
+						"Please, enable notifications in app settings",
+						Toast.LENGTH_LONG
+					).show()
+				}
+			}
 
-            Button(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .requiredSize(128.dp)
-                    .aspectRatio(1f),
-                shape = CircleShape,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (serviceStartedValue) Color.Red else Color.Green
-                ),
-                border = BorderStroke(1.dp, Color.Gray),
-                onClick = {
-                    Log.d("CLICK HERE", "$serviceStartedValue")
+			Button(
+				modifier = Modifier
+					.fillMaxWidth()
+					.requiredSize(128.dp)
+					.aspectRatio(1f),
+				shape = CircleShape,
+				colors = ButtonDefaults.buttonColors(
+					containerColor = if (serviceStartedValue) Color.Red else Color.Green
+				),
+				border = BorderStroke(1.dp, Color.Gray),
+				onClick = {
+					Log.d("CLICK HERE", "$serviceStartedValue")
 
-                    if (serviceStartedValue) {
-                        showDialog = true
-                    } else {
+					if (serviceStartedValue) {
+						showDialog = true
+					} else {
 
-                        requestPermissionLauncher.launch(
-                            android.Manifest.permission.POST_NOTIFICATIONS
-                        )
+						requestPermissionLauncher.launch(
+							android.Manifest.permission.POST_NOTIFICATIONS
+						)
 
-                    }
-                }
-            ) {
-                Text(if (serviceStartedValue) "Stop" else "Start")
-            }
+					}
+				}
+			) {
+				Text(if (serviceStartedValue) "Stop" else "Start")
+			}
 
-            if (showDialog) AlertDialog(
+			if (showDialog) AlertDialog(
 
-                modifier = Modifier
-                    .background(Color.White, shape = RoundedCornerShape(8.dp))
-                    .padding(8.dp),
-                onDismissRequest = {
-                    showDialog = false
-                    serviceStartedSet(false)
-                },
-                content = {
-                    Column {
-                        Text(
-                            "Do you want to save the trip?",
-                            modifier = Modifier.padding(16.dp),
-                        )
-                        Row {
-                            Button(onClick = {
-                                val intent = Intent(context, LocationTrackingService::class.java)
-                                intent.setAction("stop_and_save")
-                                startForegroundService(context, intent)
+				modifier = Modifier
+					.background(Color.White, shape = RoundedCornerShape(8.dp))
+					.padding(8.dp),
+				onDismissRequest = {
+					showDialog = false
+					serviceStartedSet(false)
+				},
+				content = {
+					Column {
+						Text(
+							"Do you want to save the trip?",
+							modifier = Modifier.padding(16.dp),
+						)
+						Row {
+							Button(onClick = {
+								val intent = Intent(context, LocationTrackingService::class.java)
+								intent.setAction("stop_and_save")
+								startForegroundService(context, intent)
 
-                                showDialog = false
-                                serviceStartedSet(false)
-                                travelDuration = "-"
-                                travelDistance = "-"
-                            }) {
-                                Text("Save")
-                            }
-                            Box(Modifier.width(8.dp))
-                            Button(onClick = {
-                                val intent = Intent(context, LocationTrackingService::class.java)
-                                intent.setAction("stop")
-                                startForegroundService(context, intent)
+								showDialog = false
+								serviceStartedSet(false)
+								travelDuration = "-"
+								travelDistance = "-"
+							}) {
+								Text("Save")
+							}
+							Box(Modifier.width(8.dp))
+							Button(onClick = {
+								val intent = Intent(context, LocationTrackingService::class.java)
+								intent.setAction("stop")
+								startForegroundService(context, intent)
 
-                                showDialog = false
-                                serviceStartedSet(false)
-                                travelDuration = "-"
-                                travelDistance = "-"
-                            }) {
-                                Text("Just Stop")
-                            }
-                            Box(Modifier.width(8.dp))
-                            Button(onClick = {
-                                showDialog = false
-                            }) {
-                                Text("Cancel")
-                            }
-                        }
-                    }
-                }
-            )
+								showDialog = false
+								serviceStartedSet(false)
+								travelDuration = "-"
+								travelDistance = "-"
+							}) {
+								Text("Just Stop")
+							}
+							Box(Modifier.width(8.dp))
+							Button(onClick = {
+								showDialog = false
+							}) {
+								Text("Cancel")
+							}
+						}
+					}
+				}
+			)
 
-            Column {
-                var dropdownState by remember {
-                    mutableStateOf(false)
-                }
+			Column {
+				var dropdownState by remember {
+					mutableStateOf(false)
+				}
 
-                Button(
-                    enabled = !serviceStartedValue,
-                    onClick = {
-                        dropdownState = !dropdownState
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color.LightGray,
-                        contentColor = Color.Black,
-                    ),
-                    shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
-                    border = BorderStroke(1.dp, Color.Gray),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .drawWithContent {
-                            val strokeWidth = 2 * density
-                            val y = size.height - strokeWidth / 2
+				val underlineColor = MaterialTheme.colorScheme.primary
+				Button(
+					enabled = !serviceStartedValue,
+					onClick = {
+						dropdownState = !dropdownState
+					},
+					colors = ButtonDefaults.buttonColors(
+						containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+						contentColor = MaterialTheme.colorScheme.onSurface,
+					),
+					shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
+					border = BorderStroke(1.dp, Color.Gray),
+					modifier = Modifier
+						.fillMaxWidth()
+						.drawWithContent {
+							val strokeWidth = 2 * density
+							val y = size.height - strokeWidth / 2
 
-                            drawContent()
-                            drawLine(
-                                Color.Blue,
-                                Offset(0f, y),
-                                Offset(size.width, y),
-                                strokeWidth
-                            )
-                        }
-                ) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalAlignment = Alignment.Start,
-                    ) {
-                        Text(
-                            "Accuracy",
-                            style = MaterialTheme.typography.titleSmall.merge(
-                                fontSize = 10.sp,
-                                color = Color.Blue,
-                            ),
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        )
+							drawContent()
+							drawLine(
+								underlineColor,
+								Offset(0f, y),
+								Offset(size.width, y),
+								strokeWidth
+							)
+						}
+				) {
+					Column(
+						modifier = Modifier.fillMaxWidth(),
+						horizontalAlignment = Alignment.Start,
+					) {
+						Text(
+							"Accuracy",
+							style = MaterialTheme.typography.titleSmall.merge(
+								fontSize = 10.sp,
+								color = MaterialTheme.colorScheme.primary,
+							),
+							modifier = Modifier.padding(bottom = 8.dp)
+						)
 
-                        Text(dropdownValue.getDisplayName())
-                    }
-                }
+						Text(dropdownValue.getDisplayName())
+					}
+				}
 
-                DropdownMenu(
-                    expanded = dropdownState,
-                    onDismissRequest = { dropdownState = !dropdownState }) {
-                    DropdownMenuItem(
-                        text = { Text(DropdownValues.Low.getDisplayName()) },
-                        onClick = {
-                            dropdownValue = DropdownValues.Low
-                            dropdownState = false
-                        })
-                    DropdownMenuItem(
-                        text = { Text(DropdownValues.Mid.getDisplayName()) },
-                        onClick = {
-                            dropdownValue = DropdownValues.Mid
-                            dropdownState = false
-                        })
-                    DropdownMenuItem(
-                        text = { Text(DropdownValues.High.getDisplayName()) },
-                        onClick = {
-                            dropdownValue = DropdownValues.High
-                            dropdownState = false
-                        })
-                }
-            }
+				DropdownMenu(
+					expanded = dropdownState,
+					onDismissRequest = { dropdownState = !dropdownState }) {
+					DropdownMenuItem(
+						text = {
+							Text(
+								DropdownValues.Low.getDisplayName(),
+								color = MaterialTheme.colorScheme.inverseSurface,
+							)
+						},
+						onClick = {
+							dropdownValue = DropdownValues.Low
+							dropdownState = false
+						})
+					DropdownMenuItem(
+						text = {
+							Text(
+								DropdownValues.Mid.getDisplayName(),
+								color = MaterialTheme.colorScheme.inverseSurface,
+							)
+						},
+						onClick = {
+							dropdownValue = DropdownValues.Mid
+							dropdownState = false
+						})
+					DropdownMenuItem(
+						text = {
+							Text(
+								DropdownValues.High.getDisplayName(),
+								color = MaterialTheme.colorScheme.inverseSurface,
+							)
+						},
+						onClick = {
+							dropdownValue = DropdownValues.High
+							dropdownState = false
+						})
+				}
+			}
 
-            Box {} // bottom "padding"
-        }
-    }
+			Box {} // bottom "padding"
+		}
+	}
 }
